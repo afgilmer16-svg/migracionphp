@@ -1,7 +1,7 @@
 # Plan de migración a PHP 8.3 — brigesnote
 
 Rama de trabajo: `migracion/php-8.3` · Etiqueta de respaldo: `pre-php-8.3` (commit `e947779`)
-Fecha: 16/11/2026 · Estado: **PLAN — pendiente de aprobación (nada de esto se ha ejecutado)**
+Fecha: 16/11/2026 · Estado: **EJECUTADO en local (pasos 1–9); pendiente `git push`**
 
 ## 1. Estado actual y objetivo
 
@@ -57,15 +57,15 @@ Antes de cada commit: `git status`, `git diff --staged`, `php -l` de los archivo
 
 | # | Paso | Verificación | Mensaje de commit |
 |---|---|---|---|
-| 1 | `composer.json`: `php ^8.3`, `config.platform.php = 8.3.0`, subir Laravel a `^10.0` y paquetes de soporte (ver tabla), quitar paquetes eliminados | `composer validate --strict` | `build: exigir PHP ^8.3 y actualizar a Laravel 10` |
-| 2 | `composer update` acotado (`laravel/* , phpunit/*, nunomaduro/*, spatie/*, guzzlehttp/*`) y regenerar `composer.lock` | `composer install` limpio; `composer why-not php 8.3` sin bloqueos | `build: actualizar composer.lock para PHP 8.3` |
-| 3 | Rector **solo si aporta** (`LaravelSetList::LARAVEL_100`, `LevelSetList::UP_TO_PHP_83`) en modo `--dry-run` primero; se aplican únicamente cambios revisados | `php -l`, pruebas | `refactor: aplicar reglas de Rector para PHP 8.3` (se omite si no hay cambios) |
-| 4 | Esqueleto L10: Kernel HTTP/consola, middleware (TrustProxies, HandleCors, PreventRequestsDuringMaintenance), `RouteServiceProvider`, `Handler`, `config/*` | `php -l`; `php artisan about` y `php artisan route:list` | `refactor: adaptar la estructura de la aplicación a Laravel 10` |
-| 5 | Modelos, seeders y factories (`App\Models\User`, `database/seeders`, `UserFactory` como clase) sin cambiar tablas ni lógica | `php artisan migrate --pretend`; pruebas | `refactor: migrar modelos, seeders y factories al formato de Laravel 10` |
-| 6 | PHPUnit 10: `phpunit.xml` migrado; pruebas de humo de los 4 endpoints con SQLite en memoria | `vendor/bin/phpunit` en verde | `test: migrar a PHPUnit 10 y añadir pruebas de humo de la API` |
-| 7 | Correcciones manuales que aparezcan con `E_ALL` / `phpcs PHPCompatibility 8.3` | phpcs sin errores | `fix: corregir incompatibilidades detectadas con PHP 8.3` |
-| 8 | README (y Docker/CI solo si existieran) a PHP 8.3 | revisión manual | `docs: actualizar README a PHP 8.3 y Laravel 10` |
-| 9 | Marcar pasos hechos en este documento | — | `docs: marcar pasos completados del plan` |
+| 1 ✅ | `composer.json`: `php ^8.3`, `config.platform.php = 8.3.0`, subir Laravel a `^10.0` y paquetes de soporte (ver tabla), quitar paquetes eliminados | `composer validate --strict` | `build: exigir PHP ^8.3 y actualizar a Laravel 10` |
+| 2 ✅ | `composer update` acotado (`laravel/* , phpunit/*, nunomaduro/*, spatie/*, guzzlehttp/*`) y regenerar `composer.lock` | `composer install` limpio; `composer why-not php 8.3` sin bloqueos | `build: actualizar composer.lock para PHP 8.3` |
+| 3 ⏭️ omitido (Rector no instalado; sin cambios que aportar) | Rector **solo si aporta** (`LaravelSetList::LARAVEL_100`, `LevelSetList::UP_TO_PHP_83`) en modo `--dry-run` primero; se aplican únicamente cambios revisados | `php -l`, pruebas | `refactor: aplicar reglas de Rector para PHP 8.3` (se omite si no hay cambios) |
+| 4 ✅ | Esqueleto L10: Kernel HTTP/consola, middleware (TrustProxies, HandleCors, PreventRequestsDuringMaintenance), `RouteServiceProvider`, `Handler`, `config/*` | `php -l`; `php artisan about` y `php artisan route:list` | `refactor: adaptar la estructura de la aplicación a Laravel 10` |
+| 5 ✅ | Modelos, seeders y factories (`App\Models\User`, `database/seeders`, `UserFactory` como clase) sin cambiar tablas ni lógica | `php artisan migrate --pretend`; pruebas | `refactor: migrar modelos, seeders y factories al formato de Laravel 10` |
+| 6 ✅ | PHPUnit 10: `phpunit.xml` migrado; pruebas de humo de los 4 endpoints con SQLite en memoria | `vendor/bin/phpunit` en verde | `test: migrar a PHPUnit 10 y añadir pruebas de humo de la API` |
+| 7 ✅ sin cambios necesarios (phpcs 8.3: 0 errores; `E_ALL` sin deprecaciones) | Correcciones manuales que aparezcan con `E_ALL` / `phpcs PHPCompatibility 8.3` | phpcs sin errores | `fix: corregir incompatibilidades detectadas con PHP 8.3` |
+| 8 ✅ | README (y Docker/CI solo si existieran) a PHP 8.3 | revisión manual | `docs: actualizar README a PHP 8.3 y Laravel 10` |
+| 9 ✅ | Marcar pasos hechos en este documento | — | `docs: marcar pasos completados del plan` |
 
 Se hace `git push` tras los pasos 2, 5 y 8 como mínimo.
 
@@ -98,3 +98,13 @@ Limitación declarada: la máquina solo tiene PHP 8.4.0. La verificación “rea
 - **Pregunta:** la API pública del Ministerio de Educación (ESCALE) usada por `sync:locations` puede no responder; no se prueba contra producción.
 - **Fuera de alcance (mejoras sugeridas):** Laravel Mix → Vite, tipado estricto de controladores, pasar a Laravel 11/12, eliminar `app/Region.php`.
 - El remoto del profesor (`upstream`) no se modifica; el trabajo se sube a `origin` (`afgilmer16-svg/migracionphp`).
+
+## 8. Resultado de la ejecución
+
+- Laravel 10.50.4, PHPUnit 10.5, `composer validate --strict` limpio, `php -l` sin errores.
+- `vendor/bin/phpunit`: 9 pruebas, 15 aserciones, en verde (también con `error_reporting=-1`).
+- `phpcs PHPCompatibility testVersion 8.3`: 0 errores (1 falso positivo en `routes/console.php`).
+- Verificado sobre **PHP 8.4.0** con `platform.php = 8.3.0`; no hay PHP 8.3 real instalado.
+- `php artisan serve` no arranca porque el repo no tiene `public/` (`index.php` está en la raíz; ya ocurría antes). Se documentó `php -S 127.0.0.1:8000 index.php`. Convertir a la estructura `public/` queda como mejora aparte.
+- `app/Region.php` (duplicado de `app/Models/Region.php`) se mantiene sin tocar a la espera de decisión.
+- `composer audit` reporta 5 avisos de seguridad en `laravel/framework` 10.x; solo se corrigen en 12.x/13.x (Laravel 10 ya no recibe parches). Es la decisión de usar Laravel 10: valorar subir a 12.x antes de producción.
