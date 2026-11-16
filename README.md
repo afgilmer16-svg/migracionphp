@@ -1,6 +1,6 @@
 # 🏫 Bridges Note - MINEDU ESCALE Bridge API
 
-Microservicio y API REST en **Laravel 7** diseñado para sincronizar, estructurar y servir el catálogo oficial de instituciones educativas (colegios) y la división política/geográfica (regiones, provincias y distritos) del Perú, consumiendo directamente la API pública oficial de **MINEDU / ESCALE** (*Estadística de la Calidad Educativa*).
+Microservicio y API REST en **Laravel 10 (PHP 8.3)** diseñado para sincronizar, estructurar y servir el catálogo oficial de instituciones educativas (colegios) y la división política/geográfica (regiones, provincias y distritos) del Perú, consumiendo directamente la API pública oficial de **MINEDU / ESCALE** (*Estadística de la Calidad Educativa*).
 
 ---
 
@@ -52,12 +52,13 @@ Servir como un **puente de datos optimizado** para aplicaciones cliente (sistema
 
 ## 💻 Requisitos del Sistema
 
-- **PHP:** `7.4.x` (Recomendado) o `8.0.x`.
-  > ⚠️ **Importante:** Laravel 7 no es compatible con PHP 8.1 o superior debido a cambios en la interfaz `ArrayAccess`.
-- **Laravel Framework:** `7.30.7`
+- **PHP:** `8.3.x` (mínimo `8.3`; `composer.json` exige `^8.3`).
+  > Extensiones necesarias: `bcmath`, `ctype`, `curl`, `dom`, `fileinfo`, `mbstring`, `openssl`, `pdo_mysql`, `tokenizer`, `xml`.
+- **Laravel Framework:** `10.x` (`^10.10`)
 - **Gestor de Paquetes:** Composer 2.x
 - **Base de Datos:** MySQL 5.7+ / 8.0+ o MariaDB 10.3+
-- **Servidor Web Local:** Laragon (con PHP 7.4 Thread Safe - TS), XAMPP o `php artisan serve`.
+- **Servidor Web Local:** Laragon (con PHP 8.3), XAMPP o `php artisan serve`.
+- **Pruebas:** PHPUnit 10 (`vendor/bin/phpunit`; usan SQLite en memoria, no necesitan MySQL).
 
 ---
 
@@ -100,9 +101,11 @@ php artisan sync:locations
 
 ### 7. Iniciar el servidor
 ```bash
-php artisan serve
+php -S 127.0.0.1:8000 index.php
 ```
 La aplicación quedará disponible en `http://127.0.0.1:8000`.
+
+> ℹ️ Este repositorio tiene el `index.php` en la raíz (no existe la carpeta `public/`), por lo que `php artisan serve` no arranca; usa el servidor integrado de PHP como arriba, o Laragon/XAMPP apuntando a la raíz del proyecto.
 
 ---
 
@@ -282,13 +285,13 @@ brigesnote/
 
 ## 🛠️ Solución de Problemas Frecuentes
 
-### 1. Error: `During inheritance of ArrayAccess: Return type of ... should either be compatible`
-- **Causa:** Estás ejecutando el proyecto con PHP 8.1, 8.2 o superior.
-- **Solución:** Cambia la versión de PHP en Laragon (o en tu servidor) a **PHP 7.4 (Thread Safe)** o **PHP 8.0**.
+### 1. Error: `Your Composer dependencies require a PHP version ">= 8.3.0"`
+- **Causa:** Estás ejecutando el proyecto con una versión de PHP anterior a 8.3.
+- **Solución:** Cambia la versión de PHP en Laragon (o en tu servidor) a **PHP 8.3** y ejecuta `composer install`.
 
 ### 2. Error: `Service Apache can not start ... fcgid.conf` en Laragon
 - **Causa:** Descargaste la versión `nts` (Non-Thread Safe) de PHP en Windows.
-- **Solución:** Descarga e instala en Laragon la versión **Thread Safe (TS)** desde [windows.php.net](https://windows.php.net/downloads/releases/archives/).
+- **Solución:** Descarga e instala en Laragon la versión **Thread Safe (TS)** de PHP 8.3 desde [windows.php.net](https://windows.php.net/downloads/releases/).
 
 ### 3. Error: `Base table or view not found: 1146 Table '...sessions' doesn't exist`
 - **Causa:** En el archivo `.env` está configurado `SESSION_DRIVER=database` sin haber migrado la tabla de sesiones.
