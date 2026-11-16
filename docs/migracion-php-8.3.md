@@ -105,6 +105,6 @@ Limitación declarada: la máquina solo tiene PHP 8.4.0. La verificación “rea
 - `vendor/bin/phpunit`: 9 pruebas, 15 aserciones, en verde (también con `error_reporting=-1`).
 - `phpcs PHPCompatibility testVersion 8.3`: 0 errores (1 falso positivo en `routes/console.php`).
 - Verificado sobre **PHP 8.4.0** con `platform.php = 8.3.0`; no hay PHP 8.3 real instalado.
-- `php artisan serve` no arranca porque el repo no tiene `public/` (`index.php` está en la raíz; ya ocurría antes). Se documentó `php -S 127.0.0.1:8000 index.php`. Convertir a la estructura `public/` queda como mejora aparte.
+- `php artisan serve` no arrancaba porque el repo no tenía `public/` (`index.php`, `favicon.ico`, `robots.txt` y `web.config` estaban en la raíz). Se movieron a `public/` y se actualizó `index.php` al formato de Laravel 10.
 - `app/Region.php` (duplicado de `app/Models/Region.php`) se mantiene sin tocar a la espera de decisión.
 - `composer audit` reporta 5 avisos de seguridad en `laravel/framework` 10.x; solo se corrigen en 12.x/13.x (Laravel 10 ya no recibe parches). Es la decisión de usar Laravel 10: valorar subir a 12.x antes de producción.

@@ -101,11 +101,11 @@ php artisan sync:locations
 
 ### 7. Iniciar el servidor
 ```bash
-php -S 127.0.0.1:8000 index.php
+php artisan serve
 ```
 La aplicación quedará disponible en `http://127.0.0.1:8000`.
 
-> ℹ️ Este repositorio tiene el `index.php` en la raíz (no existe la carpeta `public/`), por lo que `php artisan serve` no arranca; usa el servidor integrado de PHP como arriba, o Laragon/XAMPP apuntando a la raíz del proyecto.
+> ℹ️ El punto de entrada es `public/index.php`. Si usas Laragon/XAMPP, apunta el *document root* a la carpeta `public/`.
 
 ---
 
