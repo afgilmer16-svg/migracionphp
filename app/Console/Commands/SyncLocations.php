@@ -1,199 +1,144 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Console\Commands;
 
-use Illuminate\Console\Command;
-use Illuminate\Support\Facades\Http;
-use App\Models\Region;
-use App\Models\Province;
 use App\Models\District;
+use App\Models\Province;
+use App\Models\Region;
 use App\Models\School;
+use App\Services\Escale\EscaleClient;
+use App\Services\Escale\EscaleException;
+use Illuminate\Console\Command;
 
 class SyncLocations extends Command
 {
-    protected $signature = 'sync:locations';
-    protected $description = 'Sincroniza regiones, provincias, distritos y escuelas desde la API y las registra en la base de datos';
+    protected $signature = 'sync:locations {--region= : Sincroniza solo esta región (código de 2 dígitos)}';
 
-    public function __construct()
-    {
-        parent::__construct();
-    }
+    protected $description = 'Sincroniza regiones, provincias, distritos y colegios desde la API de ESCALE';
 
-    public function handle()
+    private int $failures = 0;
+
+    public function handle(EscaleClient $escale): int
     {
         $this->info('Iniciando sincronización de ubicaciones...');
 
-        // Sincronizar regiones
-        $this->syncRegions();
+        try {
+            $regions = $escale->regions();
+        } catch (EscaleException $e) {
+            $this->error('Error al obtener regiones: '.$e->getMessage());
+
+            return self::FAILURE;
+        }
+
+        $only = $this->option('region');
+
+        foreach ($regions as $region) {
+            if (is_string($only) && $only !== '' && (string) $region['idRegion'] !== $only) {
+                continue;
+            }
+
+            $this->syncRegion($escale, $region);
+        }
+
+        if ($this->failures > 0) {
+            $this->warn("Sincronización terminada con {$this->failures} error(es); vuelve a ejecutarla para completar.");
+
+            return self::FAILURE;
+        }
 
         $this->info('Sincronización completa.');
-        return 0;
+
+        return self::SUCCESS;
     }
 
-    private function syncRegions()
+    /** @param array<string, mixed> $region */
+    private function syncRegion(EscaleClient $escale, array $region): void
     {
-        $this->info('Sincronizando regiones...');
-        $response = Http::withHeaders([
-            'Accept' => 'application/json', // Especifica que la respuesta esperada es JSON
-        ])->get('https://escale.minedu.gob.pe/padron/rest/regiones');
+        $id = (string) $region['idRegion'];
+        $this->info("Región {$id}: ".($region['nombreRegion'] ?? ''));
 
-        if ($response->failed()) {
-            $this->error('Error al obtener regiones');
-            return;
-        }
-        $regions = $response->json()['region'];
+        Region::upsert([[
+            'idRegion' => $id,
+            'nombreRegion' => $region['nombreRegion'] ?? null,
+            'pointX' => $region['pointX'] ?? null,
+            'pointY' => $region['pointY'] ?? null,
+            'zoom' => $region['zoom'] ?? null,
+        ]], ['idRegion'], ['nombreRegion', 'pointX', 'pointY', 'zoom']);
 
-        for ($i=0;$i<count($regions);$i++) {
-            $region=$regions[$i];
-            Region::updateOrCreate(
-                ['idRegion' => $region['idRegion']],
-                [
-                    'nombreRegion' => $region['nombreRegion'],
-                    'pointX' => $region['pointX'],
-                    'pointY' => $region['pointY'],
-                    'zoom' => $region['zoom'],
-                ]
-            );
-
-            $this->syncProvinces($region['idRegion']);
-        }
-
-        $this->info('Regiones sincronizadas correctamente.');
-    }
-
-    private function syncProvinces($regionId)
-    {
-        $this->info("Sincronizando provincias para la región $regionId...");
-        $response = Http::withHeaders([
-            'Accept' => 'application/json', // Especifica que la respuesta esperada es JSON
-        ])->get('https://escale.minedu.gob.pe/padron/rest/provincias', [
-            'idRegion' => $regionId,
-        ]);
-
-        if ($response->failed()) {
-            $this->error("Error al obtener provincias para la región $regionId");
-            return;
-        }
-        $provinces = $response->json()['provincia'];
-        if(isset($provinces['idProvincia'])){
-            Province::updateOrCreate(
-                ['idProvincia' => $provinces['idProvincia']],
-                [
-                    'nombreProvincia' => $provinces['nombreProvincia'],
-                    'pointX' => $provinces['pointX'],
-                    'pointY' => $provinces['pointY'],
-                ]
-            );
-            $this->syncDistricts($provinces['idProvincia']);
-        }else{
-            foreach ($provinces as $province) {
-                Province::updateOrCreate(
-                    ['idProvincia' => $province['idProvincia']],
-                    [
-                        'nombreProvincia' => $province['nombreProvincia'],
-                        'pointX' => $province['pointX'],
-                        'pointY' => $province['pointY'],
-                    ]
-                );
-
-                $this->syncDistricts($province['idProvincia']);
+        $this->guard("provincias de la región {$id}", function () use ($escale, $id): void {
+            foreach ($escale->provinces($id) as $province) {
+                $this->syncProvince($escale, $province);
             }
-        }
-
-
-        $this->info("Provincias para la región $regionId sincronizadas correctamente.");
+        });
     }
 
-    private function syncDistricts($provinceId)
+    /** @param array<string, mixed> $province */
+    private function syncProvince(EscaleClient $escale, array $province): void
     {
-        $this->info("Sincronizando distritos para la provincia $provinceId...");
-        $response = Http::withHeaders([
-            'Accept' => 'application/json', // Especifica que la respuesta esperada es JSON
-        ])->get('https://escale.minedu.gob.pe/padron/rest/distritos', [
-            'idProvincia' => $provinceId,
-        ]);
+        $id = (string) $province['idProvincia'];
 
-        if ($response->failed()) {
-            $this->error("Error al obtener distritos para la provincia $provinceId");
-            return;
-        }
+        Province::upsert([[
+            'idProvincia' => $id,
+            'nombreProvincia' => $province['nombreProvincia'] ?? null,
+            'pointX' => $province['pointX'] ?? null,
+            'pointY' => $province['pointY'] ?? null,
+        ]], ['idProvincia'], ['nombreProvincia', 'pointX', 'pointY']);
 
-        $districts = $response->json()['distrito'];
-        if(isset($districts['idDistrito'])){
-                District::updateOrCreate(
-                    ['idDistrito' => $districts['idDistrito']],
-                    [
-                        'nombreDistrito' => $districts['nombreDistrito'],
-                    ]
-                );
-
-                $this->syncSchools($districts['idDistrito']);
-        }else{
-            for ($j=0;$j<count($districts);$j++) {
-                $district=$districts[$j];
-                District::updateOrCreate(
-                    ['idDistrito' => $district['idDistrito']],
-                    [
-                        'nombreDistrito' => $district['nombreDistrito'],
-                    ]
-                );
-
-                $this->syncSchools($district['idDistrito']);
+        $this->guard("distritos de la provincia {$id}", function () use ($escale, $id): void {
+            foreach ($escale->districts($id) as $district) {
+                $this->syncDistrict($escale, $district);
             }
-        }
-
-        $this->info("Distritos para la provincia $provinceId sincronizados correctamente.");
+        });
     }
 
-    private function syncSchools($districtId)
+    /** @param array<string, mixed> $district */
+    private function syncDistrict(EscaleClient $escale, array $district): void
     {
-        $this->info("Sincronizando escuelas para el distrito $districtId...");
-        $response = Http::withHeaders([
-            'Accept' => 'application/json', // Especifica que la respuesta esperada es JSON
-        ])->get('https://escale.minedu.gob.pe/padron/rest/instituciones', [
-            'estados' => 1,
-            'ubigeo' => $districtId,
-        ]);
+        $id = (string) $district['idDistrito'];
 
-        if ($response->failed()) {
-            $this->error("Error al obtener escuelas para el distrito $districtId");
-            return;
-        }
-        if(!isset($response->json()['items'])){
-            $this->error("No se encontraron registros de escuelas");
-            return;
-        }
-        $schools = $response->json()['items'];
-        if(isset($schools['codMod'])){
-            School::updateOrCreate(
-                ['codMod' => $schools['codMod']],
-                [
-                    'idDistrito' => $districtId,
-                    'nombreCenEdu' => $schools['cenEdu']?? null,
-                    'cenPob' => $schools['cenPob']?? null,
-                    'dirCen' => $schools['dirCen']?? null,
-                    'director' => $schools['director'] ?? null,
-                    'dis_crecer' => $schools['dis_crecer'] ?? null,
-                    'dis_juntos' => $schools['dis_juntos'] ?? null,
-                ]
-            );
-        }else{
-            foreach ($schools as $school) {
-                School::updateOrCreate(
-                    ['codMod' => $school['codMod']],
-                    [
-                        'idDistrito' => $districtId,
-                        'nombreCenEdu' => $school['cenEdu'],
-                        'cenPob' => $school['cenPob'],
-                        'dirCen' => $school['dirCen'],
-                        'director' => $school['director'] ?? null,
-                        'dis_crecer' => $school['dis_crecer'] ?? null,
-                        'dis_juntos' => $school['dis_juntos'] ?? null,
-                    ]
+        District::upsert([[
+            'idDistrito' => $id,
+            'nombreDistrito' => $district['nombreDistrito'] ?? null,
+        ]], ['idDistrito'], ['nombreDistrito']);
+
+        $total = 0;
+
+        $this->guard("colegios del distrito {$id}", function () use ($escale, $id, &$total): void {
+            foreach ($escale->schoolPages($id) as $page) {
+                $rows = array_map(fn (array $school): array => [
+                    'codMod' => (string) $school['codMod'],
+                    'idDistrito' => $id,
+                    'nombreCenEdu' => $school['cenEdu'] ?? null,
+                    'cenPob' => $school['cenPob'] ?? null,
+                    'dirCen' => $school['dirCen'] ?? null,
+                    'director' => $school['director'] ?? null,
+                    'dis_crecer' => $school['dis_crecer'] ?? null,
+                    'dis_juntos' => $school['dis_juntos'] ?? null,
+                ], $page);
+
+                School::upsert(
+                    $rows,
+                    ['codMod'],
+                    ['idDistrito', 'nombreCenEdu', 'cenPob', 'dirCen', 'director', 'dis_crecer', 'dis_juntos']
                 );
-            }
-        }
 
-        $this->info("Escuelas para el distrito $districtId sincronizadas correctamente.");
+                $total += count($rows);
+            }
+        });
+
+        $this->line("  Distrito {$id}: {$total} colegios.");
+    }
+
+    /** Ejecuta un paso; si la API falla lo registra y continúa con el siguiente. */
+    private function guard(string $what, callable $step): void
+    {
+        try {
+            $step();
+        } catch (EscaleException $e) {
+            $this->failures++;
+            $this->error("Error en {$what}: ".$e->getMessage());
+        }
     }
 }

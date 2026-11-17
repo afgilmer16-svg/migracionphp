@@ -30,4 +30,12 @@ return [
         'region' => env('AWS_DEFAULT_REGION', 'us-east-1'),
     ],
 
+    // API pública de MINEDU / ESCALE (comando sync:locations).
+    'escale' => [
+        'url' => env('ESCALE_URL', 'https://escale.minedu.gob.pe/padron/rest'),
+        'retries' => (int) env('ESCALE_RETRIES', 3),
+        'retry_delay_ms' => (int) env('ESCALE_RETRY_DELAY_MS', 500),
+        'timeout' => (int) env('ESCALE_TIMEOUT', 30),
+    ],
+
 ];
