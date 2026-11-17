@@ -62,8 +62,23 @@ La recomendación de producción sigue siendo apuntar el *document root* a `publ
 - `SyncLocationsTest` — jerarquía completa, idempotencia, `--region`, más de 50 colegios, fallo total y fallo parcial.
 - `SeguridadTest` — rutas retiradas, JSON en errores, `.htaccess`, `.env`, restos del esqueleto.
 
-## 6. Limitaciones conocidas
+## 6. Verificación en entorno real
 
-- Las reglas de `.htaccess` están verificadas por prueba de contenido, no contra un Apache real (no hay Apache en el entorno de desarrollo).
-- La sincronización completa contra el servicio real de MINEDU no se ejecutó (tarda varios minutos y carga un servicio público); se validó el formato y la paginación con peticiones puntuales (distrito 150101) y con pruebas simuladas.
-- Probado con PHP 8.4 (el único instalado); `composer.json` fija `config.platform.php = 8.3.0` para resolver dependencias como en 8.3.
+- **PHP 8.3.36:** las 37 pruebas pasan también con PHP 8.3 (además de 8.4).
+- **Apache 2.4.71 (Windows) con PHP 8.3 por CGI**, en los dos escenarios:
+
+  | Ruta | DocumentRoot = raíz del proyecto | DocumentRoot = `public/` |
+  |---|---|---|
+  | `/up`, `/api/regiones`, `/api/colegios/230110` | 200 (JSON en la API) | 200 (JSON en la API) |
+  | `/.env` | 403 | 403 |
+  | `/.git/config`, `/composer.json`, `/vendor/…`, `/storage/…`, `/artisan` | 403 | 404 (no alcanzables) |
+  | `/api/no-existe` | 404 JSON | 404 JSON |
+
+  Requiere `mod_rewrite` y el bloque estándar `<Directory /> AllowOverride None` que traen XAMPP, Laragon y Debian; sin él Apache lee también el `.htaccess` de la raíz y responde 500.
+- **Sincronización real contra MINEDU** (`sync:locations --region=23`, Tacna): 28 distritos y 1108 colegios; el distrito 230110 guardó 170 colegios, por encima del antiguo tope de 50. La API devolvió después los 170 por `/api/colegios/230110`.
+- PHP en Windows sin bundle de certificados falla con `cURL error 60`; configurar `curl.cainfo` en `php.ini`.
+
+## 7. Limitaciones conocidas
+
+- No se ejecutó la sincronización de las 25 regiones (más de 80 000 colegios; varios minutos de carga sobre un servicio público). Se recomienda lanzarla región por región con `--region=XX`.
+- Docker no se probó en este equipo (el disco no tenía espacio); por eso los archivos Docker no forman parte de esta rama.
