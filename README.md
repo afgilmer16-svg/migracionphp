@@ -1,6 +1,6 @@
 # 🏫 Bridges Note - MINEDU ESCALE Bridge API
 
-Microservicio y API REST en **Laravel 10 (PHP 8.3)** diseñado para sincronizar, estructurar y servir el catálogo oficial de instituciones educativas (colegios) y la división política/geográfica (regiones, provincias y distritos) del Perú, consumiendo directamente la API pública oficial de **MINEDU / ESCALE** (*Estadística de la Calidad Educativa*).
+Microservicio y API REST en **Laravel 13 (PHP 8.3)** diseñado para sincronizar, estructurar y servir el catálogo oficial de instituciones educativas (colegios) y la división política/geográfica (regiones, provincias y distritos) del Perú, consumiendo directamente la API pública oficial de **MINEDU / ESCALE** (*Estadística de la Calidad Educativa*).
 
 ---
 
@@ -54,11 +54,11 @@ Servir como un **puente de datos optimizado** para aplicaciones cliente (sistema
 
 - **PHP:** `8.3.x` (mínimo `8.3`; `composer.json` exige `^8.3`).
   > Extensiones necesarias: `bcmath`, `ctype`, `curl`, `dom`, `fileinfo`, `mbstring`, `openssl`, `pdo_mysql`, `tokenizer`, `xml`.
-- **Laravel Framework:** `10.x` (`^10.10`)
+- **Laravel Framework:** `13.x` (`^13.40`, con soporte de seguridad vigente)
 - **Gestor de Paquetes:** Composer 2.x
 - **Base de Datos:** MySQL 5.7+ / 8.0+ o MariaDB 10.3+
 - **Servidor Web Local:** Laragon (con PHP 8.3), XAMPP o `php artisan serve`.
-- **Pruebas:** PHPUnit 10 (`vendor/bin/phpunit`; usan SQLite en memoria, no necesitan MySQL).
+- **Pruebas:** PHPUnit 12 (`vendor/bin/phpunit`; 37 pruebas con SQLite en memoria y la API de MINEDU simulada, no necesitan MySQL ni red).
 
 ---
 
@@ -105,7 +105,7 @@ php artisan serve
 ```
 La aplicación quedará disponible en `http://127.0.0.1:8000`.
 
-> ℹ️ El punto de entrada es `public/index.php`. Si usas Laragon/XAMPP, apunta el *document root* a la carpeta `public/`.
+> ℹ️ El punto de entrada es `public/index.php`. Con Laragon/XAMPP lo ideal es apuntar el *document root* a `public/`. Si Apache apunta a la raíz del proyecto, el `.htaccess` de la raíz reenvía todo a `public/` y responde 403 a `.env`, `vendor/`, `storage/`, etc. (requiere `mod_rewrite` y `AllowOverride All`).
 
 ---
 
@@ -150,13 +150,20 @@ php artisan sync:locations
 3. **Distritos (`/padron/rest/distritos?idProvincia={id}`):** Por cada provincia, descarga los distritos correspondientes.
 4. **Colegios (`/padron/rest/instituciones?estados=1&ubigeo={idDistrito}`):** Por cada distrito, descarga las instituciones educativas activas y las almacena en la tabla `schools` vinculando el código modular (`codMod`) como llave primaria y asociando el `idDistrito`.
 
+Opciones y comportamiento:
+
+- `php artisan sync:locations --region=15` sincroniza solo una región (código de 2 dígitos).
+- Pagina los colegios de 50 en 50 (`start`), por lo que **se guardan todos** los de cada distrito, sin tope.
+- Reintenta 3 veces ante fallos de red o errores del servidor. Si un paso sigue fallando, continúa con el resto y termina con código 1; es idempotente, se puede relanzar.
+- La URL, los reintentos y el tiempo de espera se configuran con `ESCALE_URL`, `ESCALE_RETRIES`, `ESCALE_RETRY_DELAY_MS` y `ESCALE_TIMEOUT`.
+
 > ⏱️ **Nota:** La sincronización total recorre más de 1,800 distritos y 80,000 colegios, por lo que puede tomar varios minutos según la velocidad de conexión y respuesta del servidor del MINEDU.
 
 ---
 
 ## 📡 Documentación de la API REST
 
-Todos los endpoints retornan respuestas en formato JSON bajo el prefijo `/api/`.
+Todos los endpoints retornan respuestas en formato JSON bajo el prefijo `/api/` (también los errores). Los parámetros se validan por formato: región 2 dígitos, provincia 4, distrito 6; otro formato responde 404. Límite: 60 peticiones por minuto por IP.
 
 ### 1. Listar Regiones / Departamentos
 Obtiene todas las regiones del país.
@@ -261,25 +268,22 @@ Obtiene todas las instituciones educativas registradas en un distrito según su 
 ```
 brigesnote/
 ├── app/
-│   ├── Console/Commands/
-│   │   └── SyncLocations.php       # Comando 'sync:locations' (consumo de API ESCALE)
-│   ├── Http/Controllers/
-│   │   └── LocationController.php  # Controlador de endpoints /api/
-│   └── Models/
-│       ├── District.php            # Modelo Distritos
-│       ├── Province.php            # Modelo Provincias
-│       ├── Region.php              # Modelo Regiones
-│       └── School.php              # Modelo Colegios / Escuelas
-├── database/migrations/
-│   ├── ..._create_regions_table.php
-│   ├── ..._create_provinces_table.php
-│   ├── ..._create_districts_table.php
-│   └── ..._create_schools_table.php
-├── routes/
-│   └── api.php                     # Definición de rutas REST
-├── .env.example                    # Plantilla de variables de entorno
-└── .gitignore                      # Reglas de exclusión para Git
+│   ├── Console/Commands/SyncLocations.php   # Comando 'sync:locations' (orquesta y guarda)
+│   ├── Http/Controllers/LocationController.php  # Endpoints /api/
+│   ├── Models/                              # Region, Province, District, School, User
+│   ├── Providers/AppServiceProvider.php     # Cliente ESCALE y límite de peticiones
+│   └── Services/Escale/                     # EscaleClient (reintentos, paginación) y EscaleException
+├── bootstrap/app.php                        # Rutas, middleware y excepciones (Laravel 13)
+├── database/migrations/                     # Migraciones (clases anónimas)
+├── docs/                                    # arquitectura.md y migracion-php-8.3.md
+├── public/                                  # ÚNICO punto de entrada (index.php + .htaccess)
+├── routes/api.php                           # Rutas REST con validación de formato
+├── tests/                                   # Unit (EscaleClient) y Feature (API, sync, seguridad)
+├── .htaccess                                # Contención para Apache apuntando a la raíz
+└── .env.example                             # Plantilla de variables de entorno
 ```
+
+Más detalle en [docs/arquitectura.md](docs/arquitectura.md).
 
 ---
 
@@ -293,7 +297,11 @@ brigesnote/
 - **Causa:** Descargaste la versión `nts` (Non-Thread Safe) de PHP en Windows.
 - **Solución:** Descarga e instala en Laragon la versión **Thread Safe (TS)** de PHP 8.3 desde [windows.php.net](https://windows.php.net/downloads/releases/).
 
-### 3. Error: `Base table or view not found: 1146 Table '...sessions' doesn't exist`
+### 3. `.env` o `vendor/` accesibles desde el navegador
+- **Causa:** el servidor Apache apunta a la raíz y no se aplica el `.htaccess`.
+- **Solución:** apunta el *document root* a `public/`, o activa `mod_rewrite` y `AllowOverride All`.
+
+### 4. Error: `Base table or view not found: 1146 Table '...sessions' doesn't exist`
 - **Causa:** En el archivo `.env` está configurado `SESSION_DRIVER=database` sin haber migrado la tabla de sesiones.
 - **Solución:** Cambia en `.env` a `SESSION_DRIVER=file`.
 

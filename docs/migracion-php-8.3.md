@@ -108,3 +108,7 @@ Limitación declarada: la máquina solo tiene PHP 8.4.0. La verificación “rea
 - `php artisan serve` no arrancaba porque el repo no tenía `public/` (`index.php`, `favicon.ico`, `robots.txt` y `web.config` estaban en la raíz). Se movieron a `public/` y se actualizó `index.php` al formato de Laravel 10.
 - `app/Region.php` (duplicado de `app/Models/Region.php`) se mantiene sin tocar a la espera de decisión.
 - `composer audit` reporta 5 avisos de seguridad en `laravel/framework` 10.x; solo se corrigen en 12.x/13.x (Laravel 10 ya no recibe parches). Es la decisión de usar Laravel 10: valorar subir a 12.x antes de producción.
+
+## 6. Actualización posterior (evaluación): Laravel 13
+
+La revisión posterior mostró que Laravel 10 ya no recibe correcciones (`composer audit`: 5 avisos, uno de severidad alta). Se subió a **Laravel 13.42** (requiere PHP ≥ 8.3, coincide con el objetivo del proyecto), PHPUnit 12 y Tinker 3, y se adoptó la estructura actual del framework. El detalle de arquitectura, seguridad y pruebas está en [arquitectura.md](arquitectura.md).
