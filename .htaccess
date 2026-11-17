@@ -1,3 +1,11 @@
+# Compatibilidad con Apache (XAMPP / Laragon) cuando el document root es la
+# RAÍZ del proyecto y no public/. Lo recomendado es apuntar el document root a
+# public/; este archivo es una red de seguridad.
+#
+# - Todo se reenvía a public/ (donde está el index.php real y su .htaccess).
+# - Nada fuera de public/ se entrega como archivo: .env, .git, composer.*,
+#   vendor/, storage/, app/, config/, etc. responden 403.
+
 <IfModule mod_rewrite.c>
     <IfModule mod_negotiation.c>
         Options -MultiViews -Indexes
@@ -5,17 +13,26 @@
 
     RewriteEngine On
 
-    # Handle Authorization Header
-    RewriteCond %{HTTP:Authorization} .
-    RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
+    # 1) Archivos y carpetas ocultas (.env, .git, .htpasswd...), salvo /.well-known/
+    RewriteRule (^|/)\.(?!well-known/) - [F,L]
 
-    # Redirect Trailing Slashes If Not A Folder...
-    RewriteCond %{REQUEST_FILENAME} !-d
-    RewriteCond %{REQUEST_URI} (.+)/$
-    RewriteRule ^ %1 [L,R=301]
+    # 2) Carpetas internas de la aplicación y archivos de gestión del proyecto
+    RewriteCond %{REQUEST_URI} !(^|/)public/
+    RewriteRule ^(app|bootstrap|config|database|docs|resources|routes|storage|tests|vendor)(/|$) - [F,L,NC]
+    RewriteCond %{REQUEST_URI} !(^|/)public/
+    RewriteRule ^(artisan|composer\.(json|lock)|phpunit\.xml|README\.md|Dockerfile|docker-compose\.yml)$ - [F,L,NC]
 
-    # Send Requests To Front Controller...
-    RewriteCond %{REQUEST_FILENAME} !-d
-    RewriteCond %{REQUEST_FILENAME} !-f
-    RewriteRule ^ index.php [L]
+    # 3) Todo lo demás se sirve desde public/
+    RewriteCond %{REQUEST_URI} !(^|/)public/
+    RewriteRule ^(.*)$ public/$1 [L]
 </IfModule>
+
+# Si mod_rewrite no está activo, no se sirve nada desde la raíz.
+<IfModule !mod_rewrite.c>
+    Require all denied
+</IfModule>
+
+# Defensa adicional: nunca entregar archivos ocultos.
+<FilesMatch "^\.(?!well-known)">
+    Require all denied
+</FilesMatch>
